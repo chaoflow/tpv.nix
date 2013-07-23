@@ -7,7 +7,7 @@ programmers.
 Hydra
 -----
 
-Hydra is nix' continuous build farm. It provides a JSON API which we
+Hydra_ is nix' continuous build farm. It provides a JSON API which we
 facility to provide dictionary-like access to it's data for python
 programmers.
 
@@ -15,6 +15,8 @@ programmers.
     >>> hydra = Hydra()
     >>> hydra.keys()
     ['eval', 'jobset', 'project']
+
+_Hydra: http://hydra.nixos.org
 
 
 Nix store
