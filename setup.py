@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import sys, os
 
 version = '0'
-shortdesc = "Connect vortex to nix' hydra"
+shortdesc = "Connect vortex to nix' data sources (hydra/store/...)"
 #longdesc = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
 install_requires = [
@@ -17,7 +17,7 @@ if sys.version_info < (2, 7):
     install_requires.append('ordereddict')
 
 
-setup(name='tpv.nix.hydra',
+setup(name='tpv.nix',
       version=version,
       description=shortdesc,
       #long_description=longdesc,
@@ -30,11 +30,11 @@ setup(name='tpv.nix.hydra',
       keywords='',
       author='Florian Friesdorf',
       author_email='flo@chaoflow.net',
-      url='http://github.com/chaoflow/tpv.nix.hydra',
+      url='http://github.com/chaoflow/tpv.nix',
       license='AGPLv3+',
       packages=find_packages('src'),
       package_dir = {'': 'src'},
-      namespace_packages=['tpv', 'tpv.nix'],
+      namespace_packages=['tpv'],
       include_package_data=True,
       zip_safe=True,
       install_requires=install_requires,
