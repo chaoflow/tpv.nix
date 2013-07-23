@@ -1,64 +1,67 @@
 import requests
 
+from metachao import aspect
 
 URL_BASE = 'http://hydra.nixos.org/'
 
 
 class Node(object):
-    def get_json(self, rel=''):
-        r = requests.get(URL_BASE + rel,
-                        headers={'Accept': 'application/json'})
+    def __init__(self, *args):
+        self.args = args
+
+    def get_json(self):
+        r = requests.get(URL_BASE + self.get_url(),
+                         headers={'Accept': 'application/json'})
         return r.json()
 
-
-class Hydra(Node):
-    def keys(self):
-        return [x['name']
-                for x in self.get_json()]
-
     def __getitem__(self, key):
-        return Project(key)
-
-
-class Project(Node):
-    def __init__(self, name):
-        self.name = name
+        return self.get_json()[key]
 
     def keys(self):
-        return self.get_json('project/' + self.name).keys()
+        return self.get_json().keys()
 
-    def __getitem__(self, key):
-        if key == 'jobsets':
-            return Jobsets(self.name)
+
+class mapTreeBase(aspect.Aspect):
+    url_pattern = aspect.aspectkw(url_pattern="")
+    mapping = aspect.aspectkw(mapping=None)
+
+    def get_url(self):
+        return self.url_pattern.format(*self.args)
+
+
+class mapTreeNode(mapTreeBase):
+    @aspect.plumb
+    def __getitem__(_next, self, key):
+        if key in self.mapping:
+            return self.mapping[key](*self.args)
         else:
-            return self.get_json('project/' + self.name)[key]
+            return _next(key)
 
 
-class Jobsets(Node):
-    def __init__(self, project):
-        self.project = project
+class mapTreeCollection(mapTreeBase):
+    item = aspect.aspectkw(item=None)
 
     def keys(self):
+        items = self.get_json()
+        if self.item:
+            items = items[self.item]
+
         return [x['name']
-                for x in self.get_json('project/' + self.project)["jobsets"]]
+                for x in items]
 
     def __getitem__(self, key):
-        return Jobset(self.project, key)
+        return self.mapping(key, *self.args)
 
 
-class Jobset(Node):
-    def __init__(self, project, name):
-        self.project = project
-        self.name = name
+Jobset = mapTreeNode(url_pattern="jobset/{1}/{0}",
+                     mapping=dict())(Node)
 
-    def keys(self):
-        return self.get_json('jobset/' + self.project + '/' + self.name).keys()
+Jobsets = mapTreeCollection(item="jobsets",
+                            url_pattern="project/{0}",
+                            mapping=Jobset)(Node)
 
-    def __getitem__(self, key):
-        return self.get_json('jobset/' + self.project + '/' + self.name)[key]
+Project = mapTreeNode(url_pattern="project/{0}",
+                      mapping=dict(jobsets=Jobsets))(Node)
 
-
-
-class Evaluation(Node):
-    def __getitem__(self, key):
-        pass
+Hydra = mapTreeCollection(url_pattern="",
+                          mapping=Project)(Node)
