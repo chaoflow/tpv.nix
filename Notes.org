@@ -4,3 +4,28 @@
 ** hydra
 
 *** json API
+can be accessed easily sending an extra http header to a hydra
+urls. f.ex.
+
+#+begin_src sh :results scalar
+curl -H "Accept: application/json" http://hydra.nixos.org/project/hydra
+#+end_src
+
+#+RESULTS:
+: {"owner":{"fullname":"Eelco Dolstra","username":"eelco"},
+:  "name":"hydra",
+:  "jobsets":[{"name":"hydra-ant-logger-trunk"},{"name":"hydra-master"},{"name":"trunk"}],
+:  "description":"Hydra, the Nix-based continuous build system",
+:  "homepage":"",
+:  "views":[{"name":"unstable"}],
+:  "releases":[{"timestamp":1267784594,"name":"hydra-ant-logger-2010.2"}],
+:  "hidden":0,
+:  "enabled":1,
+:  "displayName":"Hydra"}
+
+#+begin_src sh :results scalar
+curl -H "Accept: application/json" http://hydra.nixos.org/build/5572564
+#+end_src
+
+#+RESULTS:
+: {"project":"nixpkgs","stoptime":null,"job":"linux_3_2_apparmor.x86_64-linux","timestamp":1374580489,"jobset":"trunk","starttime":1374581643,"buildstatus":null,"id":5572564,"finished":0}
