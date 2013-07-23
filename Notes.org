@@ -29,3 +29,35 @@ curl -H "Accept: application/json" http://hydra.nixos.org/build/5572564
 
 #+RESULTS:
 : {"project":"nixpkgs","stoptime":null,"job":"linux_3_2_apparmor.x86_64-linux","timestamp":1374580489,"jobset":"trunk","starttime":1374581643,"buildstatus":null,"id":5572564,"finished":0}
+
+*** tree structure
+Guided by structure of hydra's json API
+
+**** hydra - basic structure
+as closely ressembling hydra's json API
+***** project (by name)
+****** nixos
+******* jobsets
+******* releases
+****** nixpkgs
+******* jobsets list of names
+***** jobset
+***** eval
+
+**** cross references - declarative way
+
+Idee:
+
+wrap_spec = dict(
+    '/project/*/jobsets/': compose(references(source='/jobset/'), ...)
+)
+
+wrap_spec = {
+    project: {
+       '**': {
+         'jobsets': references(source='/jobset')
+       }
+    }
+}
+
+with_references = references(plain, refspec=refspec)
