@@ -16,7 +16,7 @@ programmers.
     >>> hydra.keys()
     ['eval', 'jobset', 'project']
 
-_Hydra: http://hydra.nixos.org
+.. _Hydra: http://hydra.nixos.org
 
 
 Nix store
