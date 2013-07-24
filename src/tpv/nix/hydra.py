@@ -80,9 +80,23 @@ Jobsets = mapTree(Node,
                   url_pattern="project/{0}",
                   mapping=Jobset)
 
+
+# needs to be added to hydra's json like with eval
+
+# View    = mapTree(Node,
+#                   url_pattern="view/{1}/{0}",
+#                   mapping=dict())
+
+# Views   = mapTree(Node,
+#                   path="views",
+#                   url_pattern="project/{0}",
+#                   mapping=Views)
+
 Project = mapTree(Node,
                   url_pattern="project/{0}",
-                  mapping=dict(jobsets=Jobsets))
+                  mapping=dict(jobsets=Jobsets
+                               # , views=Views
+                               ))
 
 Hydra   = mapTree(Node,
                   url_pattern="",
