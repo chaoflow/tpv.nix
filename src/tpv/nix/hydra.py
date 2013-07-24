@@ -55,44 +55,35 @@ class Node(object):
 
 @cacheGet
 @traverseGet
-class mapTreeBase(aspect.Aspect):
+class mapTree(aspect.Aspect):
     url_pattern = aspect.aspectkw(url_pattern="")
     mapping = aspect.aspectkw(mapping=None)
 
     def get_url(self):
         return self.url_pattern.format(*self.args)
 
-
-class mapTreeNode(mapTreeBase):
     @aspect.plumb
     def __getitem__(_next, self, key):
-        if key in self.mapping:
+        if not isinstance(self.mapping, dict):
+            return self.mapping(key, *self.args)
+        elif key in self.mapping:
             return self.mapping[key](*self.args)
         else:
             return _next(key)
 
+Jobset  = mapTree(Node,
+                  url_pattern="jobset/{1}/{0}",
+                  mapping=dict())
 
-class mapTreeCollection(mapTreeBase):
-    def keys(self):
-        return self.get().keys()
+Jobsets = mapTree(Node,
+                  path="jobsets",
+                  url_pattern="project/{0}",
+                  mapping=Jobset)
 
-    def __getitem__(self, key):
-        return self.mapping(key, *self.args)
+Project = mapTree(Node,
+                  url_pattern="project/{0}",
+                  mapping=dict(jobsets=Jobsets))
 
-
-Jobset = mapTreeNode(Node,
-                     url_pattern="jobset/{1}/{0}",
-                     mapping=dict())
-
-Jobsets = mapTreeCollection(Node,
-                            path="jobsets",
-                            url_pattern="project/{0}",
-                            mapping=Jobset)
-
-Project = mapTreeNode(Node,
-                      url_pattern="project/{0}",
-                      mapping=dict(jobsets=Jobsets))
-
-Hydra = mapTreeCollection(Node,
-                          url_pattern="",
-                          mapping=Project)
+Hydra   = mapTree(Node,
+                  url_pattern="",
+                  mapping=Project)
