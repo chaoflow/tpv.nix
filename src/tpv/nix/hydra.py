@@ -5,18 +5,6 @@ from metachao import aspect
 URL_BASE = 'http://hydra.nixos.org/'
 
 
-class listToDictGet(aspect.Aspect):
-    key = aspect.aspectkw(key="name")
-
-    @aspect.plumb
-    def get(_next, self):
-        res = _next()
-        if isinstance(res, list):
-            res = {r[self.key]: r
-                   for r in res}
-        return res
-
-
 class cacheGet(aspect.Aspect):
     cache = aspect.aspectkw(cache=None)
 
