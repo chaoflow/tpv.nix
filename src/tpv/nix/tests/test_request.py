@@ -40,4 +40,5 @@ class TestRequest(unittest.TestCase):
         h = Hydra()
         trunk = h['nixos']['jobsets']['trunk']
 
+        self.assertTrue(isinstance(trunk, Jobset))
         self.assertEqual(trunk["project"], "nixos")
