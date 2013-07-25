@@ -1,3 +1,4 @@
 -e ../metachao
 -e ../tpv
+-e ../tpv.cli
 -e .
