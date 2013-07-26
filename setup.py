@@ -44,10 +44,13 @@ setup(name='tpv.nix',
       entry_points={
           'console_scripts': ['xin = tpv.nix.xin:app'],
           'tpv.nix.xin.commands': [
-              'install = tpv.nix.xin.install:install',
-              'generation = tpv.nix.xin.generation:generation',
-              'generation/remove = tpv.nix.xin.generation:remove',
-              'remove = tpv.nix.xin.remove:remove',
+              'install = tpv.nix.xin:Install',
+              #'generation = tpv.nix.xin.generation:Generation',
+              #'generation/remove = tpv.nix.xin.generation:Remove',
+              'profile = tpv.nix.xin.profile:Profile',
+              'profile/remove = tpv.nix.xin.profile:Remove',
+              'remove = tpv.nix.xin:Remove',
+              'search = tpv.nix.xin:Search',
           ],
       },
       )

@@ -56,13 +56,10 @@ Remove a program::
 
     % xin remove --profile greetings hello
 
-List installed programs::
-
-    % xin list --profile greetings
-
 Search programs::
 
-    % xin search *ell*
+    % xin search hell
+    % xin search --installed
 
 List available profiles::
 

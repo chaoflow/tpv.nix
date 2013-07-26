@@ -9,13 +9,9 @@ class Generation(OrderedDict):
     def __call__(self):
         print "huhu"
 
-generation = Generation()
-
 
 class Remove(OrderedDict):
     """Remove generations
     """
     def __call__(self):
         print "huhu"
-
-remove = Remove()
