@@ -16,6 +16,7 @@ buildEnv {
   name = "dev-env";
   ignoreCollisions = true;
   paths = [
+    pythonPackages.genzshcomp
     pythonPackages.requests
   ] ++ base.paths;
 }

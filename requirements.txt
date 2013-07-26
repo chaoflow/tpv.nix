@@ -1,3 +1,5 @@
 -e ../metachao
+-e ../plumbum
 -e ../tpv
+-e ../tpv.cli
 -e .
