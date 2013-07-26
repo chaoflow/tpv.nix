@@ -1,8 +1,9 @@
 import requests
+from itertools import chain
 
 from metachao import aspect
 
-URL_BASE = 'http://hydra.nixos.org/'
+URL_BASE = 'http://hydra.nixos.org'
 
 
 class cacheGet(aspect.Aspect):
@@ -17,10 +18,10 @@ class cacheGet(aspect.Aspect):
         return self.cache
 
 
-def listToDict(dict, key="name"):
-    if isinstance(dict, list):
-        dict = {r[key]: r for r in dict}
-    return dict
+def listToDict(value, key="name"):
+    if isinstance(value, list):
+        value = {r[key]: r for r in value}
+    return value
 
 
 class traverseGet(aspect.Aspect):
@@ -37,67 +38,90 @@ class traverseGet(aspect.Aspect):
         return listToDict(node)
 
 
+def unroll_spec(spec):
+    tree = dict(name='', children={})
+
+    for path, meta in spec.iteritems():
+        components = filter(None, path[1:].split('/'))
+        parameters = list(meta.get("parameters", ()))
+        node = tree
+        for comp in components:
+            children = node["children"]
+            if comp not in children:
+                children[comp] = dict(name=comp,
+                                      children={})
+            node = children[comp]
+
+            if comp == "*":
+                node["param"] = parameters.pop(0)
+
+        node.update(meta)
+        node['path'] = path
+
+    return tree
+
+mapping_spec = \
+{ "/projects/": dict(url_pattern="/"),
+  "/projects/*": dict(parameters=("project",),
+                      url_pattern="/project/{project}"),
+  "/jobsets/*/": dict(parameters=("project",),
+                      url_pattern="/project/{project}", traverse="jobsets"),
+  "/jobsets/*/*": dict(parameters=("project", "jobset"),
+                       url_pattern="/jobset/{project}/{jobset}"),
+  "/views/*/": dict(parameters=("project",),
+                    url_pattern="/project/{project}",
+                    path="views"),
+  "/views/*/*": dict(parameters=("project", "view"),
+                     url_pattern="/views/{project}/{view}"),
+  # "/projects/*/jobsets/": dict(refer="/jobsets/*/"),
+  # "/projects/*/views/": dict(refer="/views/*/")
+}
+
+
 class Node(object):
-    def __init__(self, *args):
-        self.args = args
+    def __init__(self, spec, parameters={}):
+        self.spec = spec
+        self.parameters = parameters
+
+    def keys(self):
+        if  "url_pattern" not in self.spec:
+            return self.spec["children"].keys()
+        elif self.spec["url_pattern"]:
+            node = self.get()
+            traverse = self.spec.get("traverse", ())
+            if isinstance(traverse, str):
+                traverse = (traverse,)
+            for component in traverse:
+                node = node[component]
+
+            return listToDict(node).keys()
+        else:
+            raise AttributeError
+
+    def __getitem__(self, key):
+        children = self.spec["children"]
+
+        if key in children:
+            return Node(children[key], self.parameters)
+        elif "*" in children:
+            return Node(children["*"],
+                        dict(chain(((children["*"]["param"], key),),
+                                   self.parameters.iteritems())))
+
+        elif self.spec["url_pattern"]:
+            return self.get()[key]
+        else:
+            raise KeyError
+
+    def get_url(self):
+        return self.spec["url_pattern"].format(**self.parameters)
 
     def get(self):
         accept_header = {'Accept': 'application/json'}
         return requests.get(URL_BASE + self.get_url(),
                             headers=accept_header).json()
 
-    def __getitem__(self, key):
-        return self.get()[key]
 
-    def keys(self):
-        return self.get().keys()
-
-
-@cacheGet
-@traverseGet
-class mapTree(aspect.Aspect):
-    url_pattern = aspect.aspectkw(url_pattern="")
-    mapping = aspect.aspectkw(mapping=None)
-
-    def get_url(self):
-        return self.url_pattern.format(*self.args)
-
-    @aspect.plumb
-    def __getitem__(_next, self, key):
-        if not isinstance(self.mapping, dict):
-            return self.mapping(key, *self.args)
-        elif key in self.mapping:
-            return self.mapping[key](*self.args)
-        else:
-            return _next(key)
-
-Jobset  = mapTree(Node,
-                  url_pattern="jobset/{1}/{0}",
-                  mapping=dict())
-
-Jobsets = mapTree(Node,
-                  path="jobsets",
-                  url_pattern="project/{0}",
-                  mapping=Jobset)
-
-
-# needs to be added to hydra's json like with eval
-
-# View    = mapTree(Node,
-#                   url_pattern="view/{1}/{0}",
-#                   mapping=dict())
-
-# Views   = mapTree(Node,
-#                   path="views",
-#                   url_pattern="project/{0}",
-#                   mapping=Views)
-
-Project = mapTree(Node,
-                  url_pattern="project/{0}",
-                  mapping=dict(jobsets=Jobsets
-                               # , views=Views
-                               ))
-
-Hydra   = mapTree(Node,
-                  url_pattern="",
-                  mapping=Project)
+class Hydra(Node):
+    def __init__(self):
+        super(Hydra, self).__init__(unroll_spec(mapping_spec))
