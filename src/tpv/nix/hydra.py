@@ -6,7 +6,18 @@ from metachao import aspect
 URL_BASE = 'http://hydra.nixos.org'
 
 
-class cacheGet(aspect.Aspect):
+class hydra_json_get(aspect.Aspect):
+    def get(self):
+        url = self.get_url()
+        if not url:
+            return dict()
+        else:
+            accept_header = {'Accept': 'application/json'}
+            return requests.get(URL_BASE + self.get_url(),
+                                headers=accept_header).json()
+
+
+class cache_get(aspect.Aspect):
     cache = aspect.aspectkw(cache=None)
 
     @aspect.plumb
@@ -18,110 +29,120 @@ class cacheGet(aspect.Aspect):
         return self.cache
 
 
-def listToDict(value, key="name"):
+def list_to_dict(value, key="name"):
     if isinstance(value, list):
         value = {r[key]: r for r in value}
     return value
 
 
-class traverseGet(aspect.Aspect):
-    path = aspect.aspectkw(path=())
+class traverse_get(aspect.Aspect):
+    traverse = aspect.aspectkw(traverse=())
 
     @aspect.plumb
     def get(_next, self):
         node = _next()
-        if isinstance(self.path, str):
-            self.path = (self.path,)
-        for component in self.path:
+        if isinstance(self.traverse, str):
+            self.traverse = (self.traverse,)
+        for component in self.traverse:
             node = node[component]
 
-        return listToDict(node)
+        return list_to_dict(node)
+
+
+class apply_map_spec(aspect.Aspect):
+    children = aspect.aspectkw(children={})
+    url_pattern = aspect.aspectkw(url_pattern=None)
+    parameters = aspect.aspectkw(parameters={})
+    param = aspect.aspectkw(param=None)
+
+    @aspect.plumb
+    def __getitem__(_next, self, key):
+        children = self.children
+
+        if key in children:
+            return HydraNode(parameters=self.parameters, **children[key])
+        elif "*" in children:
+            parameters = merge_dicts(self.parameters,
+                                     {children["*"]["param"]: key})
+            return HydraNode(parameters=parameters, **children["*"])
+        else:
+            return self.get()[key]
+
+    @aspect.plumb
+    def keys(_next, self):
+        return merge_dicts(self.children, self.get()).keys()
+
+    def get_url(self):
+        return self.url_pattern.format(**self.parameters) \
+            if self.url_pattern else None
+
+
+def merge_dicts(*dicts):
+    return dict(chain(*(d.iteritems() for d in dicts)))
+
+hydra_node = aspect.compose(
+    cache_get,
+    traverse_get,
+    hydra_json_get,
+    apply_map_spec
+)
+
+
+class Node(object):
+    def keys(self):
+        raise AttributeError
+
+    def __getitem__(self, key):
+        raise KeyError
+
+
+HydraNode = hydra_node(Node)
 
 
 def unroll_spec(spec):
-    tree = dict(name='', children={})
+    tree = dict(children={})
 
     for path, meta in spec.iteritems():
         components = filter(None, path[1:].split('/'))
-        parameters = list(meta.get("parameters", ()))
+        keywords = list(meta.pop("parameter_keywords", ()))
+
         node = tree
         for comp in components:
             children = node["children"]
             if comp not in children:
-                children[comp] = dict(name=comp,
-                                      children={})
+                children[comp] = dict(children={})
             node = children[comp]
 
             if comp == "*":
-                node["param"] = parameters.pop(0)
+                node["param"] = keywords.pop(0)
+
+        if "refer" in meta:
+            meta = spec[meta["refer"]]
 
         node.update(meta)
-        node['path'] = path
+        # node['path'] = path
 
     return tree
 
+
 mapping_spec = \
 { "/projects/": dict(url_pattern="/"),
-  "/projects/*": dict(parameters=("project",),
+  "/projects/*": dict(parameter_keywords=("project",),
                       url_pattern="/project/{project}"),
-  "/jobsets/*/": dict(parameters=("project",),
+  "/jobsets/*/": dict(parameter_keywords=("project",),
                       url_pattern="/project/{project}", traverse="jobsets"),
-  "/jobsets/*/*": dict(parameters=("project", "jobset"),
+  "/jobsets/*/*": dict(parameter_keywords=("project", "jobset"),
                        url_pattern="/jobset/{project}/{jobset}"),
-  "/views/*/": dict(parameters=("project",),
+  "/views/*/": dict(parameter_keywords=("project",),
                     url_pattern="/project/{project}",
-                    path="views"),
-  "/views/*/*": dict(parameters=("project", "view"),
+                    traverse="views"),
+  "/views/*/*": dict(parameter_keywords=("project", "view"),
                      url_pattern="/views/{project}/{view}"),
-  # "/projects/*/jobsets/": dict(refer="/jobsets/*/"),
-  # "/projects/*/views/": dict(refer="/views/*/")
+  "/projects/*/jobsets/": dict(refer="/jobsets/*/",
+                               parameter_keywords=("project",)),
+  "/projects/*/views/": dict(refer="/views/*/",
+                             parameter_keywords=("project",))
 }
 
 
-class Node(object):
-    def __init__(self, spec, parameters={}):
-        self.spec = spec
-        self.parameters = parameters
-
-    def keys(self):
-        if  "url_pattern" not in self.spec:
-            return self.spec["children"].keys()
-        elif self.spec["url_pattern"]:
-            node = self.get()
-            traverse = self.spec.get("traverse", ())
-            if isinstance(traverse, str):
-                traverse = (traverse,)
-            for component in traverse:
-                node = node[component]
-
-            return listToDict(node).keys()
-        else:
-            raise AttributeError
-
-    def __getitem__(self, key):
-        children = self.spec["children"]
-
-        if key in children:
-            return Node(children[key], self.parameters)
-        elif "*" in children:
-            return Node(children["*"],
-                        dict(chain(((children["*"]["param"], key),),
-                                   self.parameters.iteritems())))
-
-        elif self.spec["url_pattern"]:
-            return self.get()[key]
-        else:
-            raise KeyError
-
-    def get_url(self):
-        return self.spec["url_pattern"].format(**self.parameters)
-
-    def get(self):
-        accept_header = {'Accept': 'application/json'}
-        return requests.get(URL_BASE + self.get_url(),
-                            headers=accept_header).json()
-
-
-class Hydra(Node):
-    def __init__(self):
-        super(Hydra, self).__init__(unroll_spec(mapping_spec))
+Hydra = hydra_node(Node, **unroll_spec(mapping_spec))

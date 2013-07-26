@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import unittest
 
-from ..hydra import Hydra, Node
+from ..hydra import Hydra, Node, HydraNode
 
 from metachao import aspect
 
@@ -14,13 +14,13 @@ class TestRequest(unittest.TestCase):
     def test_hydra_getitem(self):
         hy = Hydra()
         projects = hy['projects']
-        self.assertTrue(isinstance(projects, Node))
+        self.assertTrue(isinstance(projects, HydraNode))
 
     def test_project_getitem(self):
         hy = Hydra()
         nixos = hy['projects']['nixos']
 
-        self.assertTrue(isinstance(nixos, Node))
+        self.assertTrue(isinstance(nixos, HydraNode))
         self.assertEqual(nixos["name"], "nixos")
 
     def test_jobset_getitem(self):
