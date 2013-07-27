@@ -15,7 +15,6 @@ install_requires = [
 
 
 if sys.version_info < (2, 7):
-    install_requires.append('argparse')
     install_requires.append('ordereddict')
     install_requires.append('unittest2')
 
