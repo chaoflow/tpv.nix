@@ -91,9 +91,10 @@ class Xin(tpv.cli.Command):
     Come join the discussion!
     """
     VERSION = 0
-    entry_point_group = "tpv.nix.xin.commands"
 
     def __call__(self):
         self.help()
+
+tpv.pkg_resources.load_entry_points("tpv.nix.xin.commands", Xin)
 
 app = Xin.run
