@@ -2,9 +2,11 @@ from __future__ import absolute_import
 
 import unittest
 
-from ..hydra import Hydra, Node, HydraNode
+from ..hydra import Hydra, \
+    HydraNode, Projects, Project, \
+    ProjectJobsets, Jobsets, Jobset, \
+    ProjectViews, Views, View
 
-from metachao import aspect
 
 class TestRequest(unittest.TestCase):
     # def test_hydra_keys(self):
@@ -13,34 +15,56 @@ class TestRequest(unittest.TestCase):
 
     def test_hydra_getitem(self):
         hy = Hydra()
-        projects = hy['projects']
-        self.assertTrue(isinstance(projects, HydraNode))
+        self.assertTrue(isinstance(hy['projects'], Projects))
+        self.assertTrue(isinstance(hy['jobsets'], Jobsets))
+        self.assertTrue(isinstance(hy['views'], Views))
+
+    def test_hydra_iter(self):
+        hy = Hydra()
+        self.assertEqual(set(hy), set(('projects', 'jobsets', 'views')))
+
+    def test_projects_getitem(self):
+        hy = Hydra()
+        nixos = hy['projects']['nixos']
+
+        self.assertTrue(isinstance(nixos, HydraNode))
+        self.assertTrue(isinstance(nixos, Project))
+
+    def test_projects_iter(self):
+        hy = Hydra()
+        projs = hy['projects']
+
+        self.assertTrue('nixos' in projs)
+        self.assertTrue(set(('nixos', 'nixpkgs')).issubset(set(projs)))
+        self.assertTrue(set(('nixos', 'nixpkgs')).issubset(set(projs.keys())))
+        self.assertTrue(isinstance(projs.itervalues()[0], Project))
 
     def test_project_getitem(self):
         hy = Hydra()
         nixos = hy['projects']['nixos']
 
-        self.assertTrue(isinstance(nixos, HydraNode))
-        self.assertEqual(nixos["name"], "nixos")
+        # Jobsets and Views sub factories
+        self.assertTrue(set(("jobsets", "views")).issubset(set(nixos)))
+        self.assertTrue(isinstance(nixos["jobsets"], ProjectJobsets))
 
     def test_jobset_getitem(self):
         hy = Hydra()
         jobsets = hy['jobsets']
         trunk = jobsets['nixos']['trunk']
 
-        self.assertTrue(isinstance(trunk, Node))
+        self.assertTrue(isinstance(trunk, HydraNode))
         self.assertEqual(trunk["project"], "nixos")
 
-    def test_hydra_keys(self):
-        hy = Hydra()
-        self.assertEqual(set(hy.keys()), set(("projects", "views", "jobsets")))
+    # def test_hydra_keys(self):
+    #     hy = Hydra()
+    #     self.assertEqual(set(hy.keys()), set(("projects", "views", "jobsets")))
 
-    def test_project_keys(self):
-        hy = Hydra()
-        nixos = hy['projects']['nixos']
+    # def test_project_keys(self):
+    #     hy = Hydra()
+    #     nixos = hy['projects']['nixos']
 
-        self.assertTrue(set(("owner", "name", "jobsets", "description"))
-                        .issubset(nixos.keys()))
+    #     self.assertTrue(set(("owner", "name", "jobsets", "description"))
+    #                     .issubset(nixos.keys()))
 
     # def test_project_getitem(self):
     #     hy = Hydra()

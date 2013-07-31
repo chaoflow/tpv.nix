@@ -2,31 +2,23 @@ import requests
 from itertools import chain
 
 from metachao import aspect
+from metachao.classtree import Base, OrderedDict
 
 URL_BASE = 'http://hydra.nixos.org'
 
 
+def merge_dicts(*dicts):
+    return dict(chain(*(d.iteritems() for d in dicts)))
+
+
 class hydra_json_get(aspect.Aspect):
-    def get(self):
-        url = self.get_url()
+    def get(self, url):
         if not url:
             return dict()
         else:
             accept_header = {'Accept': 'application/json'}
-            return requests.get(URL_BASE + self.get_url(),
+            return requests.get(URL_BASE + url,
                                 headers=accept_header).json()
-
-
-class cache_get(aspect.Aspect):
-    cache = aspect.aspectkw(cache=None)
-
-    @aspect.plumb
-    def get(_next, self):
-        if not self.cache:
-            if self.cache is None:
-                self.cache = dict()
-            self.cache.update(_next())
-        return self.cache
 
 
 def list_to_dict(value, key="name"):
@@ -36,113 +28,171 @@ def list_to_dict(value, key="name"):
 
 
 class traverse_get(aspect.Aspect):
-    traverse = aspect.aspectkw(traverse=())
+    traverse = aspect.config(traverse=())
 
     @aspect.plumb
-    def get(_next, self):
-        node = _next()
-        if isinstance(self.traverse, str):
-            self.traverse = (self.traverse,)
+    def get(_next, self, url):
+        node = _next(url)
         for component in self.traverse:
             node = node[component]
 
         return list_to_dict(node)
 
 
-class apply_map_spec(aspect.Aspect):
-    children = aspect.aspectkw(children={})
-    url_pattern = aspect.aspectkw(url_pattern=None)
-    parameters = aspect.aspectkw(parameters={})
-    param = aspect.aspectkw(param=None)
+class attributes(aspect.Aspect):
+    url_pattern = aspect.config(None)
+    __attributes__ = None
 
     @aspect.plumb
     def __getitem__(_next, self, key):
-        children = self.children
+        try:
+            return _next(key)
+        except KeyError:
+            pass
 
-        if key in children:
-            return HydraNode(parameters=self.parameters, **children[key])
-        elif "*" in children:
-            parameters = merge_dicts(self.parameters,
-                                     {children["*"]["param"]: key})
-            return HydraNode(parameters=parameters, **children["*"])
-        else:
-            return self.get()[key]
+        return self.attributes[key]
+
+    @property
+    def attributes(self):
+        if self.__attributes__ is None:
+            url = self.url_pattern.format(**self.parameters)
+            self.__attributes__ = self.get(url)
+
+        return self.__attributes__
+
+
+class iterable_factory(aspect.Aspect):
+    url_pattern = aspect.config(None)
+    __factory_children__ = None
 
     @aspect.plumb
-    def keys(_next, self):
-        return merge_dicts(self.children, self.get()).keys()
+    def __iter__(_next, self):
+        return chain(_next(), iter(self.factory_children))
 
-    def get_url(self):
-        return self.url_pattern.format(**self.parameters) \
-            if self.url_pattern else None
+    @property
+    def factory_children(self):
+        if self.__factory_children__ is None:
+            url = self.url_pattern.format(**self.parameters)
+            self.__factory_children__ = self.get(url)
 
-
-def merge_dicts(*dicts):
-    return dict(chain(*(d.iteritems() for d in dicts)))
-
-hydra_node = aspect.compose(
-    cache_get,
-    traverse_get,
-    hydra_json_get,
-    apply_map_spec
-)
+        return self.__factory_children__
 
 
-class Node(object):
-    def keys(self):
-        raise AttributeError
+class factory(aspect.Aspect):
+    factory_parameter = aspect.config(None)
+    factory_class = aspect.config(None)
 
-    def __getitem__(self, key):
-        raise KeyError
+    @aspect.plumb
+    def __getitem__(_next, self, key):
+        try:
+            return _next(key)
+        except KeyError:
+            pass
 
-
-HydraNode = hydra_node(Node)
-
-
-def unroll_spec(spec):
-    tree = dict(children={})
-
-    for path, meta in spec.iteritems():
-        components = filter(None, path[1:].split('/'))
-        keywords = list(meta.pop("parameter_keywords", ()))
-
-        node = tree
-        for comp in components:
-            children = node["children"]
-            if comp not in children:
-                children[comp] = dict(children={})
-            node = children[comp]
-
-            if comp == "*":
-                node["param"] = keywords.pop(0)
-
-        if "refer" in meta:
-            meta = spec[meta["refer"]]
-
-        node.update(meta)
-        # node['path'] = path
-
-    return tree
+        parameters = merge_dicts({self.factory_parameter: key},
+                                 self.parameters)
+        node = self.factory_class(**parameters)
+        self[key] = node
+        return node
 
 
-mapping_spec = \
-{ "/projects/": dict(url_pattern="/"),
-  "/projects/*": dict(parameter_keywords=("project",),
-                      url_pattern="/project/{project}"),
-  "/jobsets/*/": dict(parameter_keywords=("project",),
-                      url_pattern="/project/{project}", traverse="jobsets"),
-  "/jobsets/*/*": dict(parameter_keywords=("project", "jobset"),
-                       url_pattern="/jobset/{project}/{jobset}"),
-  "/views/*/": dict(parameter_keywords=("project",),
-                    url_pattern="/project/{project}",
-                    traverse="views"),
-  "/views/*/*": dict(parameter_keywords=("project", "view"),
-                     url_pattern="/views/{project}/{view}"),
-  "/projects/*/jobsets/": dict(refer="/jobsets/*/",
-                               parameter_keywords=("project",)),
-  "/projects/*/views/": dict(refer="/views/*/",
-                             parameter_keywords=("project",))
-}
+hydra_factory = aspect.compose(iterable_factory,
+                               traverse_get,
+                               factory)
 
 
-Hydra = hydra_node(Node, **unroll_spec(mapping_spec))
+class instantiate_with_parameters_upon_traversal(aspect.Aspect):
+    """Instantiate class trees of dictionary-like nodes upon traversal"""
+
+    @aspect.plumb
+    def __init__(_next, self, **parameters):
+        _next()
+        self.parameters = parameters
+
+    @aspect.plumb
+    def __getitem__(_next, self, key):
+        try:
+            return _next(key)
+        except KeyError:
+            pass
+
+        node = self.__class__[key](**self.parameters)
+        self[key] = node
+        return node
+
+
+@hydra_json_get
+@instantiate_with_parameters_upon_traversal
+class HydraNode(Base, OrderedDict):
+    pass
+
+
+## Structure Definitions
+
+# Views branch
+
+@attributes(url_pattern="/view/{project}/{view}")
+class View(HydraNode):
+    pass
+
+
+@hydra_factory(url_pattern="/project/{project}",
+               traverse=("views",),
+               factory_class=View,
+               factory_parameter="view")
+class ProjectViews(HydraNode):
+    pass
+
+
+@hydra_factory(url_pattern="/",
+               factory_class=ProjectViews,
+               factory_parameter="project")
+class Views(HydraNode):
+    pass
+
+
+# Jobsets branch
+
+@attributes(url_pattern="/jobset/{project}/{jobset}")
+class Jobset(HydraNode):
+    pass
+
+
+@hydra_factory(url_pattern="/project/{project}",
+               traverse=("jobsets",),
+               factory_class=Jobset,
+               factory_parameter="jobset")
+class ProjectJobsets(HydraNode):
+    pass
+
+
+@hydra_factory(url_pattern="/",
+               factory_class=ProjectJobsets,
+               factory_parameter="project")
+class Jobsets(HydraNode):
+    pass
+
+
+# Projects branch
+
+@attributes(url_pattern="/project/{project}")
+class Project(HydraNode):
+    pass
+
+Project['jobsets'] = ProjectJobsets
+Project['views'] = ProjectViews
+
+
+@hydra_factory(url_pattern="/",
+               factory_class=Project,
+               factory_parameter="project")
+class Projects(HydraNode):
+    pass
+
+
+class Hydra(HydraNode):
+    pass
+
+Hydra['jobsets'] = Jobsets
+Hydra['projects'] = Projects
+Hydra['views'] = Views
