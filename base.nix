@@ -24,6 +24,7 @@ in
              pylint
              recursivePthLoader
              sqlite3
+             six
              virtualenv
            ] ++
            (optionals isPy26
