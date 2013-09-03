@@ -61,3 +61,9 @@ wrap_spec = {
 }
 
 with_references = references(plain, refspec=refspec)
+
+* bugs
+** ❢ "missed" parameters in command line interpretation
+running the command ./bin/xin generation --profile test remove will
+not set self.profile in the Generation.Remove subapplication but only
+in the Generation application, which will not be used.
