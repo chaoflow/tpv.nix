@@ -73,6 +73,7 @@ class Profile(tpv.cli.Command):
 class Remove(tpv.cli.Command):
     """Remove a profile with all its generations
     """
+    @tpv.cli.completion(profiles=tpv.cli.DictDynamicCompletion(dicttree=MODEL))
     def __call__(self, *profiles):
         user_profile_path = os.readlink(os.environ['HOME'] + '/.nix-profile')
         for profile in (MODEL['myprofiles'][x] for x in profiles):
